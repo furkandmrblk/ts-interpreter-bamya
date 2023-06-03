@@ -43,18 +43,38 @@ export class Lexer {
 
     switch (this.ch) {
       case '=':
-        // TODO: Support for == && ===
-        token = createToken(TokenType.Assign, this.ch);
+        if (this.peekCharacter() === '=') {
+          this.readCharacter();
+          token = createToken(TokenType.Equal, '==');
+        } else {
+          token = createToken(TokenType.Assign, this.ch);
+        }
         break;
       case '!':
-        // TODO: peakCharacter
-        token = createToken(TokenType.Bang, this.ch);
+        if (this.peekCharacter() === '=') {
+          this.readCharacter();
+          token = createToken(TokenType.NotEqual, '!=');
+        } else {
+          token = createToken(TokenType.Bang, this.ch);
+        }
         break;
       case '+':
         token = createToken(TokenType.Plus, this.ch);
         break;
       case '-':
         token = createToken(TokenType.Minus, this.ch);
+        break;
+      case '*':
+        token = createToken(TokenType.Asterisk, this.ch);
+        break;
+      case '/':
+        token = createToken(TokenType.Slash, this.ch);
+        break;
+      case '>':
+        token = createToken(TokenType.GreaterThan, this.ch);
+        break;
+      case '<':
+        token = createToken(TokenType.LessThan, this.ch);
         break;
       case '(':
         token = createToken(TokenType.LParen, this.ch);
@@ -102,6 +122,12 @@ export class Lexer {
     ) {
       this.readCharacter();
     }
+  }
+
+  private peekCharacter(): string {
+    if (this.readPosition >= this.input.length) {
+      return '\0';
+    } else return this.input[this.readPosition];
   }
 
   private readIdentity(): string {
