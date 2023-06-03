@@ -32,36 +32,44 @@ export const TokenType = {
   If: 'IF',
   Else: 'ELSE',
   Return: 'RETURN',
-};
+} as const;
 
-type TokenItem<T extends Record<string, any> = typeof TokenType> = T[keyof T];
+export type TokenItem<T extends Record<string, any> = typeof TokenType> =
+  keyof T;
+
+type TokenKeys = keyof typeof TokenType;
+type TokenLiteralType = TokenKeys extends `${infer A}`
+  ? A extends TokenItem
+    ? (typeof TokenType)[A]
+    : never
+  : never;
 
 export type Token = {
-  type: TokenItem;
+  type: TokenLiteralType;
   literal: string;
 };
 
 export const createToken = (type: TokenItem, literal: string): Token => {
   return {
-    type,
+    type: TokenType[type],
     literal,
   };
 };
 
-const keywords: Record<string, string> = {
-  fn: 'FUNCTION',
-  let: 'LET',
-  true: 'TRUE',
-  false: 'FALSE',
-  if: 'IF',
-  else: 'ELSE',
-  return: 'RETURN',
+const Keywords: Record<string, TokenItem> = {
+  fn: 'Function',
+  let: 'Let',
+  true: 'True',
+  false: 'False',
+  if: 'If',
+  else: 'Else',
+  return: 'Return',
 };
 
 export const lookupIdentity = (ident: string): TokenItem => {
-  const token: string | undefined = keywords[ident];
+  const keyword: TokenItem | undefined = Keywords[ident];
 
-  if (token) {
-    return token;
-  } else return TokenType.Ident;
+  if (keyword) {
+    return keyword;
+  } else return 'Ident';
 };
