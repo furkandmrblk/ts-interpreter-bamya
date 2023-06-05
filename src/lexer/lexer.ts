@@ -1,10 +1,4 @@
-import {
-  Token,
-  TokenItem,
-  TokenType,
-  createToken,
-  lookupIdentity,
-} from '../token/token';
+import { Token, createToken, lookupIdentity } from '../token/token';
 
 const _a = 'a'.charCodeAt(0);
 const _A = 'A'.charCodeAt(0);
