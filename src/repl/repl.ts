@@ -1,6 +1,7 @@
 import * as readline from 'readline';
 import { Lexer } from '../lexer/lexer';
-import { Token, TokenType } from '../token/token';
+import { Parser } from '../parser/parser';
+import { Eval } from '../eval/evaluator';
 
 const PROMPT = '>> ';
 
@@ -15,14 +16,24 @@ export const startRepl = (): void => {
 
   rl.on('line', (line: string) => {
     const l = new Lexer(line);
+    const p = new Parser(l);
+
+    const program = p.ParseProgram();
 
     while (true) {
-      const tok: Token = l.getNextToken();
-      console.log(tok);
-
-      if (tok.type === TokenType.Eof) {
+      if (p.errors.length !== 0) {
+        printParseErrors(p.errors);
         break;
       }
+
+      const evaluated = Eval(program);
+
+      if (evaluated) {
+        console.log(evaluated.inspect());
+        console.log('\n');
+      }
+
+      break;
     }
 
     rl.prompt();
@@ -30,4 +41,24 @@ export const startRepl = (): void => {
     console.log('Exiting.');
     process.exit(0);
   });
+};
+
+const bamya = `
+        ___----""""\-__
+_,-""""---------------|\/\\-____  
+´"-___----------------|/\//---/
+      """---_________//"""`;
+
+const printParseErrors = (errors: string[]) => {
+  let str: string =
+    '-----------------------------\nWe ran into some bamya here!\n';
+  str += bamya;
+  str += '\n\n';
+  str += 'Parser errors:\n';
+
+  errors.forEach((msg, i) => {
+    str += `\t${msg}\n`;
+  });
+
+  console.error(str);
 };

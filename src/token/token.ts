@@ -3,7 +3,6 @@ export const TokenType = {
   Eof: 'EOF',
 
   Ident: 'IDENT',
-
   Int: 'INT',
 
   Assign: '=',
@@ -12,6 +11,7 @@ export const TokenType = {
   Minus: '-',
   Asterisk: '*',
   Slash: '/',
+
   GreaterThan: '>',
   LessThan: '<',
 
@@ -22,6 +22,7 @@ export const TokenType = {
   RParen: ')',
   LSquirly: '{',
   RSquirly: '}',
+
   Comma: ',',
   Semicolon: ';',
 
