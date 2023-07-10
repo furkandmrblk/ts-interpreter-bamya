@@ -1,8 +1,10 @@
 type ObjectType = string;
 
 export enum ObjectTypes {
+  RETURN_VALUE_OBJ = 'RETURN_VALUE',
   INTEGER_OBJ = 'INTEGER',
   BOOLEAN_OBJ = 'BOOLEAN',
+  ERROR_OBJ = 'ERROR',
   NULL_OBJ = 'NULL',
 }
 
@@ -58,5 +60,40 @@ export class Null implements Object {
 
   public type(): ObjectTypes {
     return ObjectTypes.NULL_OBJ;
+  }
+}
+
+type ReturnType = {
+  value: Object;
+};
+export class ReturnValue implements Object, ReturnType {
+  public value: Object;
+
+  constructor(value: Object) {
+    this.value = value;
+  }
+
+  public type(): ObjectType {
+    return ObjectTypes.RETURN_VALUE_OBJ;
+  }
+
+  public inspect(): string {
+    return this.value.inspect();
+  }
+}
+
+export class Error implements Object {
+  public message: string;
+
+  constructor(message: string) {
+    this.message = message;
+  }
+
+  public type(): string {
+    return ObjectTypes.ERROR_OBJ;
+  }
+
+  public inspect(): string {
+    return 'ERROR: ' + this.message;
   }
 }
