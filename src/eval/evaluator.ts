@@ -4,13 +4,22 @@ import {
   IntegerLiteral,
   Boolean as AstBoolean,
   Program,
-  Statement,
   PrefixExpression,
   InfixExpression,
   IfExpression,
   BlockStatement,
   ReturnStatement,
+  LetStatement,
+  Identifier,
+  FunctionLiteral,
+  CallExpression,
+  Expression,
+  StringLiteral,
 } from '../ast/ast';
+import {
+  Environment,
+  newEnclosedEnvironment,
+} from '../object/environment/environment';
 import {
   Integer,
   Boolean,
@@ -19,6 +28,8 @@ import {
   ObjectTypes,
   ReturnValue,
   Error,
+  Function,
+  String,
 } from '../object/object';
 
 type EvalTypes = Integer | Boolean | Object | Error;
@@ -29,26 +40,41 @@ export const references = {
   FALSE: new Boolean(false),
 } as const;
 
-export const Eval = (node: AstNode): EvalTypes | null => {
+export const Eval = (node: AstNode, env: Environment): EvalTypes | null => {
   if (node instanceof Program) {
-    return evalProgram(node);
+    return evalProgram(node, env);
   }
 
   if (node instanceof BlockStatement) {
-    evaluateBlockStatement(node);
+    return evaluateBlockStatement(node, env);
   }
 
   if (node instanceof ExpressionStatement) {
-    return Eval(node.expression);
+    return Eval(node.expression, env);
   }
 
   if (node instanceof ReturnStatement) {
-    const val = Eval(node.returnValue);
+    const val = Eval(node.returnValue, env);
+
+    if (isError(val)) return val;
+
     if (val) return new ReturnValue(val);
+  }
+
+  if (node instanceof LetStatement) {
+    const val = Eval(node.value, env);
+
+    if (isError(val)) return val;
+
+    env.set(node.name.value, val);
   }
 
   if (node instanceof IntegerLiteral) {
     return new Integer(node.value);
+  }
+
+  if (node instanceof StringLiteral) {
+    return new String(node.value);
   }
 
   if (node instanceof AstBoolean) {
@@ -56,13 +82,19 @@ export const Eval = (node: AstNode): EvalTypes | null => {
   }
 
   if (node instanceof PrefixExpression) {
-    const right = Eval(node.right);
+    const right = Eval(node.right, env);
+
+    if (isError(right)) return right;
+
     if (right) return evaluatePrefixExpression(node.operator, right);
   }
 
   if (node instanceof InfixExpression) {
-    const left = Eval(node.left);
-    const right = Eval(node.right);
+    const left = Eval(node.left, env);
+    const right = Eval(node.right, env);
+
+    if (isError(left)) return left;
+    if (isError(right)) return right;
 
     if (left && right) {
       return evaluateInfixExpression(node.operator, left, right);
@@ -70,17 +102,37 @@ export const Eval = (node: AstNode): EvalTypes | null => {
   }
 
   if (node instanceof IfExpression) {
-    return evaluateIfExpression(node);
+    return evaluateIfExpression(node, env);
+  }
+
+  if (node instanceof Identifier) {
+    return evaluateIdentifier(node, env);
+  }
+
+  if (node instanceof FunctionLiteral) {
+    return new Function(node.parameters, node.body, env);
+  }
+
+  if (node instanceof CallExpression) {
+    const fn = Eval(node.fn, env);
+
+    if (isError(fn)) return fn;
+
+    const args = evaluateExpressions(node.arguments, env);
+
+    if (args.length === 1 && isError(args[0])) return args[0];
+
+    if (fn) return applyFunction(fn, args);
   }
 
   return null;
 };
 
-const evalProgram = (program: Program): EvalTypes | null => {
+const evalProgram = (program: Program, env: Environment): EvalTypes | null => {
   let result: EvalTypes | null = null;
 
   for (const statement of program.statements) {
-    result = Eval(statement);
+    result = Eval(statement, env);
 
     if (result !== null) {
       const type = result.type();
@@ -97,11 +149,14 @@ const evalProgram = (program: Program): EvalTypes | null => {
   return result;
 };
 
-const evaluateBlockStatement = (block: BlockStatement): Object | null => {
+const evaluateBlockStatement = (
+  block: BlockStatement,
+  env: Environment
+): Object | null => {
   let result: Object | null = null;
 
   for (const statement of block.statements) {
-    const result = Eval(statement);
+    result = Eval(statement, env);
 
     if (result !== null) {
       const type = result.type();
@@ -109,12 +164,21 @@ const evaluateBlockStatement = (block: BlockStatement): Object | null => {
       if (
         type === ObjectTypes.RETURN_VALUE_OBJ ||
         type === ObjectTypes.ERROR_OBJ
-      )
+      ) {
         return result;
+      }
     }
   }
 
   return result;
+};
+
+const evaluateIdentifier = (node: Identifier, env: Environment): Object => {
+  const val = env.get(node.value);
+
+  if (!val) return newError(`identifier not found: ${node.value}`);
+
+  return val;
 };
 
 const nativeBoolToBooleanObject = (input: boolean): Boolean => {
@@ -231,16 +295,83 @@ const isTruthy = (obj: Object): boolean => {
   }
 };
 
-const evaluateIfExpression = (ie: IfExpression): Object | null => {
-  const condition = Eval(ie.condition);
+const evaluateIfExpression = (
+  ie: IfExpression,
+  env: Environment
+): Object | null => {
+  const condition = Eval(ie.condition, env);
+
+  if (isError(condition)) {
+    return condition;
+  }
 
   if (condition && isTruthy(condition)) {
-    return Eval(ie.consequence);
+    return Eval(ie.consequence, env);
   } else if (ie.alternative !== null) {
-    return Eval(ie.alternative);
+    return Eval(ie.alternative, env);
   } else return references.NULL;
+};
+
+const evaluateExpressions = (
+  exps: Expression[],
+  env: Environment
+): Object[] => {
+  const result: Object[] = [];
+
+  for (const e of exps) {
+    const evaluated = Eval(e, env);
+
+    if (isError(evaluated)) {
+      if (evaluated) {
+        return [evaluated];
+      } else return [];
+    }
+
+    if (evaluated) result.push(evaluated);
+  }
+
+  return result;
+};
+
+const applyFunction = (fn: Object, args: Object[]): Object | null => {
+  if (!(fn instanceof Function))
+    throw new Error(`not a function: ${fn.type()}.`);
+
+  const extendedEnv = extendFunctionEnvironment(fn, args);
+  const evaluated = Eval(fn.body, extendedEnv);
+
+  return unwrapReturnValue(evaluated);
+};
+
+const extendFunctionEnvironment = (
+  fn: Function,
+  args: Object[]
+): Environment => {
+  const env = newEnclosedEnvironment(fn.env);
+
+  for (let i = 0; i < fn.parameters.length; i++) {
+    const param = fn.parameters[i];
+
+    env.set(param.value, args[i]);
+  }
+
+  return env;
+};
+
+const unwrapReturnValue = (obj: Object | null): Object | null => {
+  if (obj instanceof ReturnValue) {
+    return obj.value;
+  } else if (obj) return obj;
+
+  return null;
 };
 
 const newError = (message: string): Error => {
   return new Error(message);
+};
+
+const isError = (obj: Object | null): boolean => {
+  if (obj !== null) {
+    return obj.type() === ObjectTypes.ERROR_OBJ;
+  } else return false;
 };

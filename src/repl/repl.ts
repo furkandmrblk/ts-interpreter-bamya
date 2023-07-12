@@ -2,6 +2,7 @@ import * as readline from 'readline';
 import { Lexer } from '../lexer/lexer';
 import { Parser } from '../parser/parser';
 import { Eval } from '../eval/evaluator';
+import { createNewEnvironment } from '../object/environment/environment';
 
 const PROMPT = '>> ';
 
@@ -14,10 +15,11 @@ export const startRepl = (): void => {
 
   rl.prompt();
 
+  const env = createNewEnvironment();
+
   rl.on('line', (line: string) => {
     const l = new Lexer(line);
     const p = new Parser(l);
-
     const program = p.ParseProgram();
 
     while (true) {
@@ -26,7 +28,7 @@ export const startRepl = (): void => {
         break;
       }
 
-      const evaluated = Eval(program);
+      const evaluated = Eval(program, env);
 
       if (evaluated) {
         console.log(evaluated.inspect());

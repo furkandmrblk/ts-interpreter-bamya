@@ -4,6 +4,7 @@ export const TokenType = {
 
   Ident: 'IDENT',
   Int: 'INT',
+  String: 'STRING',
 
   Assign: '=',
   Bang: '!',

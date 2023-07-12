@@ -88,6 +88,9 @@ export class Lexer {
       case '}':
         token = createToken('RSquirly', this.ch);
         break;
+      case '"':
+        token = createToken('String', this.readString());
+        break;
       case ',':
         token = createToken('Comma', this.ch);
         break;
@@ -135,6 +138,20 @@ export class Lexer {
 
     while (isLetter(this.ch)) {
       this.readCharacter();
+    }
+
+    return this.input.slice(position, this.position);
+  }
+
+  private readString(): string {
+    const position = this.position + 1;
+
+    while (true) {
+      this.readCharacter();
+
+      if (this.ch === '"' || this.ch === '\0') {
+        break;
+      }
     }
 
     return this.input.slice(position, this.position);

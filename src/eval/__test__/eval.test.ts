@@ -1,10 +1,13 @@
 import { Lexer } from '../../lexer/lexer';
+import { createNewEnvironment } from '../../object/environment/environment';
 import {
   Boolean,
   Error,
+  Function,
   Integer,
   Object,
   ObjectTypes,
+  String,
 } from '../../object/object';
 import { Parser } from '../../parser/parser';
 import { Eval } from '../evaluator';
@@ -275,6 +278,15 @@ test('Evaluate Return-Statements', () => {
       input: 'if (10 > 1) { if (10 > 1) { return 10; } return 1; }',
       expected: 10,
     },
+    {
+      input: 'let f = fn(x) { return x; x + 10; }; f(10);',
+      expected: 10,
+    },
+    {
+      input:
+        'let f = fn(x) { let result = x + 10; return result; return 10; }; f(10);',
+      expected: 20,
+    },
   ];
 
   for (const test of tests) {
@@ -319,6 +331,10 @@ test('Error Handling', () => {
       input: 'if (10 > 1) { if (10 > 1) { return true + false; } return 1; }',
       expectedMessage: 'unknown operator: BOOLEAN + BOOLEAN',
     },
+    {
+      input: 'foobar',
+      expectedMessage: 'identifier not found: foobar',
+    },
   ];
 
   for (const test of tests) {
@@ -328,7 +344,6 @@ test('Error Handling', () => {
       !evaluated ||
       (evaluated && evaluated.type() !== ObjectTypes.ERROR_OBJ)
     ) {
-      console.log(test);
       throw new Error(`no error object returned. got=${evaluated}.`);
     }
 
@@ -341,12 +356,125 @@ test('Error Handling', () => {
   }
 });
 
+test('Evaluate Let-Statements', () => {
+  const tests: {
+    input: string;
+    expected: number;
+  }[] = [
+    {
+      input: 'let a = 5; a;',
+      expected: 5,
+    },
+    {
+      input: 'let a = 5 * 5; a;',
+      expected: 25,
+    },
+    {
+      input: 'let a = 5; let b = a; b;',
+      expected: 5,
+    },
+    {
+      input: 'let a = 5; let b = a; let c = a + b + 5; c;',
+      expected: 15,
+    },
+  ];
+
+  for (const test of tests) {
+    testIntegerObject(testEval(test.input), test.expected);
+  }
+});
+
+test('Evaluate Function-Object', () => {
+  const input = 'fn(x) { x + 2; };';
+
+  const evaluated = testEval(input);
+
+  if (!(evaluated instanceof Function))
+    throw new Error(`object is not Function. got=${evaluated}.`);
+
+  if (evaluated.parameters.length !== 1)
+    throw new Error(
+      `function has wrong parameters. parameters=${evaluated.parameters}.`
+    );
+
+  if (evaluated.parameters[0].String() !== 'x')
+    throw new Error(`parameter is not 'x'. got=${evaluated.parameters[0]}.`);
+
+  const expectedBody = '(x + 2)';
+
+  if (evaluated.body.String() !== expectedBody)
+    throw new Error(
+      `body is not ${expectedBody}. got=${evaluated.body.String()}.`
+    );
+});
+
+test('Evaluate Function-Application', () => {
+  const tests: { input: string; expected: number }[] = [
+    {
+      input: 'let identity = fn(x) { x; }; identity(5);',
+      expected: 5,
+    },
+    {
+      input: 'let identity = fn(x) { return x; }; identity(5);',
+      expected: 5,
+    },
+    {
+      input: 'let double = fn(x) { x * 2; }; double(5);',
+      expected: 10,
+    },
+    {
+      input: 'let add = fn(x, y) { x + y; }; add(5, 5);',
+      expected: 10,
+    },
+    {
+      input: 'let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));',
+      expected: 20,
+    },
+    {
+      input: 'fn(x) { x; }(5)',
+      expected: 5,
+    },
+  ];
+
+  for (const test of tests) {
+    testIntegerObject(testEval(test.input), test.expected);
+  }
+});
+
+test('Evaluate Closures', () => {
+  const input = `
+  let newAdder = fn(x) {
+    fn (y) { x + y };
+  };
+
+  let addTwo = newAdder(2);
+  addTwo(2);
+  `;
+
+  testIntegerObject(testEval(input), 4);
+});
+
+test('Evaluate String-Literals', () => {
+  const input = `"Hello World!`;
+
+  const evaluated = testEval(input);
+
+  if (!(evaluated instanceof String))
+    throw new Error(`object is not String. got=${evaluated}.`);
+
+  if (evaluated.value !== 'Hello World!')
+    throw new Error(
+      `String has wrong value. got=${evaluated.value}, wanted="Hello World!".`
+    );
+});
+
 const testEval = (input: string) => {
   const lexer = new Lexer(input);
   const p = new Parser(lexer);
   const program = p.ParseProgram();
+  const env = createNewEnvironment();
 
-  return Eval(program);
+  return Eval(program, env);
 };
 
 const testIntegerObject = (obj: unknown, expected: number): boolean => {

@@ -12,6 +12,7 @@ import {
   PrefixExpression,
   ReturnStatement,
   Statement,
+  StringLiteral,
 } from '../../ast/ast';
 import { Lexer } from '../../lexer/lexer';
 import { Parser } from '../parser';
@@ -816,6 +817,30 @@ test('CallExpression-Parsing', () => {
   testLiteralExpression(exp.arguments[0], 1);
   testInfixExpression(exp.arguments[1], 2, '*', 3);
   testInfixExpression(exp.arguments[2], 4, '+', 5);
+});
+
+test('StringLiteral-Expression', () => {
+  const input = `"hello world";`;
+
+  const lexer = new Lexer(input);
+  const p = new Parser(lexer);
+
+  const program = p.ParseProgram();
+
+  checkParserErrors(p);
+
+  const statement = program.statements[0];
+
+  if (!(statement instanceof ExpressionStatement))
+    throw new Error(`statement is not *ast.ExpressionStatement.`);
+
+  const literal = statement.expression;
+
+  if (!(literal instanceof StringLiteral))
+    throw new Error(`exp not *ast.StringLiteral. got=${literal}.`);
+
+  if (literal.value !== 'hello world')
+    throw new Error(`literal.value not "hello world". got=${literal.value}.`);
 });
 
 const testLetStatement = (

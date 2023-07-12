@@ -13,6 +13,7 @@ import {
   PrefixExpression,
   Program,
   ReturnStatement,
+  StringLiteral,
 } from '../ast/ast';
 import { Lexer } from '../lexer/lexer';
 import { Token, TokenType } from '../token/token';
@@ -64,6 +65,7 @@ export class Parser {
     this.registerPrefix('(', this.parseGroupedExpression);
     this.registerPrefix('IF', this.parseIfExpression);
     this.registerPrefix('FUNCTION', this.parseFunctionLiteral);
+    this.registerPrefix('STRING', this.parseStringLiteral);
 
     this.infixParseFns = {};
 
@@ -268,6 +270,10 @@ export class Parser {
     lit.value = value;
 
     return lit;
+  }
+
+  private parseStringLiteral(): Expression | null {
+    return new StringLiteral(this.currentToken, this.currentToken.literal);
   }
 
   private parsePrefixExpression(): Expression {

@@ -1,20 +1,33 @@
 import { Token } from '../token/token';
 
 export interface AstNode {
-  TokenLiteral: () => string;
-  String: () => string;
+  TokenLiteral(): string;
+  String(): string;
 }
 
 export interface Statement extends AstNode {
-  statementNode: () => void;
+  statementNode(): void;
 }
 
 export interface Expression extends AstNode {
-  expressionNode: () => void;
+  expressionNode(): void;
 }
 
-export class Program {
-  constructor(public statements: (Statement | LetStatement)[]) {
+type ExpressionTypeWithValue<T> = {
+  token: Token;
+  value: T;
+} & Expression;
+
+type StatementType = {
+  token: Token;
+} & Statement;
+
+type ProgramType = {
+  statements: Statement[];
+} & AstNode;
+
+export class Program implements ProgramType {
+  constructor(public statements: Statement[]) {
     this.statements = statements;
   }
 
@@ -37,7 +50,12 @@ export class Program {
   }
 }
 
-export class LetStatement {
+type LetStatementType = {
+  name: Identifier;
+  value: Expression;
+} & StatementType;
+
+export class LetStatement implements LetStatementType {
   public name!: Identifier;
   public value!: Expression;
 
@@ -74,10 +92,14 @@ export class LetStatement {
   }
 }
 
-export class ReturnStatement {
+type ReturnStatementType = {
+  returnValue: Expression;
+} & StatementType;
+
+export class ReturnStatement implements ReturnStatementType {
   public returnValue!: Expression;
 
-  constructor(private token: Token) {
+  constructor(public token: Token) {
     this.token = token;
   }
 
@@ -102,10 +124,14 @@ export class ReturnStatement {
   }
 }
 
-export class ExpressionStatement {
+type ExpressionStatementType = {
+  expression: Expression;
+} & StatementType;
+
+export class ExpressionStatement implements ExpressionStatementType {
   public expression!: Expression;
 
-  constructor(private token: Token) {
+  constructor(public token: Token) {
     this.token = token;
   }
 
@@ -124,8 +150,12 @@ export class ExpressionStatement {
   }
 }
 
-export class BlockStatement {
-  constructor(private token: Token, public statements: Statement[] = []) {
+type BlockStatementType = {
+  statements: Statement[];
+} & StatementType;
+
+export class BlockStatement implements BlockStatementType {
+  constructor(public token: Token, public statements: Statement[] = []) {
     this.token = token;
     this.statements = statements;
   }
@@ -147,10 +177,10 @@ export class BlockStatement {
   }
 }
 
-export class Identifier {
+export class Identifier implements ExpressionTypeWithValue<string> {
   public value!: string;
 
-  constructor(private token: Token, value: string) {
+  constructor(public token: Token, value: string) {
     this.token = token;
     this.value = value;
   }
@@ -166,10 +196,10 @@ export class Identifier {
   }
 }
 
-export class Boolean {
+export class Boolean implements ExpressionTypeWithValue<boolean> {
   public value: boolean;
 
-  constructor(private token: Token, value: boolean) {
+  constructor(public token: Token, value: boolean) {
     this.token = token;
     this.value = value;
   }
@@ -185,10 +215,10 @@ export class Boolean {
   }
 }
 
-export class IntegerLiteral {
+export class IntegerLiteral implements ExpressionTypeWithValue<number> {
   public value!: number;
 
-  constructor(private token: Token, value?: number) {
+  constructor(public token: Token, value?: number) {
     this.token = token;
 
     if (value) {
@@ -207,10 +237,33 @@ export class IntegerLiteral {
   }
 }
 
-export class PrefixExpression {
+export class StringLiteral implements ExpressionTypeWithValue<string> {
+  constructor(public token: Token, public value: string) {
+    this.token = token;
+    this.value = value;
+  }
+
+  public expressionNode() {}
+
+  public TokenLiteral(): string {
+    return this.token.literal;
+  }
+
+  public String(): string {
+    return this.token.literal;
+  }
+}
+
+type PrefixExpressionType = {
+  token: Token;
+  right: Expression;
+  operator: string;
+} & Expression;
+
+export class PrefixExpression implements PrefixExpressionType {
   public right!: Expression;
 
-  constructor(private token: Token, public operator: string) {
+  constructor(public token: Token, public operator: string) {
     (this.token = token), (this.operator = operator);
   }
 
@@ -232,11 +285,18 @@ export class PrefixExpression {
   }
 }
 
-export class InfixExpression {
+type InfixExpressionType = {
+  token: Token;
+  left: Expression;
+  right: Expression;
+  operator: string;
+} & Expression;
+
+export class InfixExpression implements InfixExpressionType {
   public left!: Expression;
   public right!: Expression;
 
-  constructor(private token: Token, public operator: string, left: Expression) {
+  constructor(public token: Token, public operator: string, left: Expression) {
     this.token = token;
     this.operator = operator;
     this.left = left;
@@ -261,12 +321,19 @@ export class InfixExpression {
   }
 }
 
-export class IfExpression {
+type IfExpressionType = {
+  token: Token;
+  condition: Expression;
+  consequence: BlockStatement;
+  alternative: BlockStatement;
+} & Expression;
+
+export class IfExpression implements IfExpressionType {
   condition!: Expression;
   consequence!: BlockStatement;
   alternative!: BlockStatement;
 
-  constructor(private token: Token) {
+  constructor(public token: Token) {
     this.token = token;
   }
 
@@ -293,11 +360,17 @@ export class IfExpression {
   }
 }
 
-export class FunctionLiteral {
+type FunctionLiteralType = {
+  token: Token;
+  parameters: Identifier[];
+  body: BlockStatement;
+} & Expression;
+
+export class FunctionLiteral implements FunctionLiteralType {
   public parameters: Identifier[] = [];
   public body!: BlockStatement;
 
-  constructor(private token: Token) {
+  constructor(public token: Token) {
     this.token = token;
   }
 
@@ -326,10 +399,16 @@ export class FunctionLiteral {
   }
 }
 
-export class CallExpression {
+type CallExpressionType = {
+  token: Token;
+  fn: Expression;
+  arguments: Expression[];
+} & Expression;
+
+export class CallExpression implements CallExpressionType {
   public arguments: Expression[] = [];
 
-  constructor(private token: Token, public fn: Expression) {
+  constructor(public token: Token, public fn: Expression) {
     this.token = token;
     this.fn = fn;
   }

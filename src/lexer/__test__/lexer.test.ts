@@ -70,7 +70,11 @@ test('test getNextToken() 2.0', function () {
 	}
   
   10 == 10;
-	10 != 9;`;
+	10 != 9;
+  
+  "foobar"
+  "foo bar"
+  `;
 
   const tokens: Token[] = [
     { type: TokenType.Let, literal: 'let' },
@@ -150,6 +154,15 @@ test('test getNextToken() 2.0', function () {
     { type: TokenType.NotEqual, literal: '!=' },
     { type: TokenType.Int, literal: '9' },
     { type: TokenType.Semicolon, literal: ';' },
+
+    {
+      type: TokenType.String,
+      literal: 'foobar',
+    },
+    {
+      type: TokenType.String,
+      literal: 'foo bar',
+    },
   ];
 
   const lexer = new Lexer(input);
