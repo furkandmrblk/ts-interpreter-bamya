@@ -436,3 +436,105 @@ export class CallExpression implements CallExpressionType {
     return str;
   }
 }
+
+type ArrayType = {
+  token: Token;
+  elements: Expression[];
+} & Expression;
+
+export class ArrayLiteral implements ArrayType {
+  public elements!: Expression[];
+
+  constructor(public token: Token, elements?: Expression[]) {
+    this.token = token;
+    this.elements = elements ?? [];
+  }
+
+  public expressionNode(): void {}
+
+  public TokenLiteral(): string {
+    return this.token.literal;
+  }
+
+  public String(): string {
+    let str: string = '';
+
+    const elements: string[] = [];
+
+    for (const el of this.elements) {
+      elements.push(el.String());
+    }
+
+    str += '[';
+    str += elements.join(', ');
+    str += ']';
+
+    return str;
+  }
+}
+
+type IndexExpressionType = {
+  token: Token;
+  left: Expression;
+  index: Expression;
+} & Expression;
+
+export class IndexExpression implements IndexExpressionType {
+  public index!: Expression;
+
+  constructor(public token: Token, public left: Expression) {
+    this.token = token;
+    this.left = left;
+  }
+
+  public expressionNode(): void {}
+
+  public TokenLiteral(): string {
+    return this.token.literal;
+  }
+
+  public String(): string {
+    let str: string = '';
+    str += '(';
+    str += this.left.String();
+    str += '[';
+    str += this.index.String();
+    str += '])';
+
+    return str;
+  }
+}
+
+type HashLiteralType = {
+  token: Token;
+  pairs: Map<Expression, Expression>;
+} & Expression;
+
+export class HashLiteral implements HashLiteralType {
+  public pairs!: Map<Expression, Expression>;
+
+  constructor(public token: Token) {
+    this.token = token;
+  }
+
+  public expressionNode(): void {}
+
+  public TokenLiteral(): string {
+    return this.token.literal;
+  }
+
+  public String(): string {
+    let str: string = '';
+
+    const pairs: string[] = [];
+    for (const [key, value] of Object.entries(this.pairs)) {
+      pairs.push(key.toString() + ':' + value.toString());
+    }
+
+    str += '{';
+    str += pairs.join(', ');
+    str += '}';
+
+    return str;
+  }
+}

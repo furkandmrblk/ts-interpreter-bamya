@@ -1,12 +1,15 @@
 import {
+  ArrayLiteral,
   BlockStatement,
   Boolean,
   CallExpression,
   Expression,
   ExpressionStatement,
   FunctionLiteral,
+  HashLiteral,
   Identifier,
   IfExpression,
+  IndexExpression,
   InfixExpression,
   IntegerLiteral,
   LetStatement,
@@ -27,6 +30,7 @@ enum Precedence {
   PRODUCT = 5,
   PREFIX = 6,
   CALL = 7,
+  INDEX = 8,
 }
 
 const precedences: { [key: string]: number } = {
@@ -39,6 +43,7 @@ const precedences: { [key: string]: number } = {
   [TokenType.Slash]: Precedence.PRODUCT,
   [TokenType.Asterisk]: Precedence.PRODUCT,
   [TokenType.LParen]: Precedence.CALL,
+  [TokenType.LBracket]: Precedence.INDEX,
 };
 
 type PrefixParseFn = () => Expression | null;
@@ -66,6 +71,8 @@ export class Parser {
     this.registerPrefix('IF', this.parseIfExpression);
     this.registerPrefix('FUNCTION', this.parseFunctionLiteral);
     this.registerPrefix('STRING', this.parseStringLiteral);
+    this.registerPrefix('[', this.parseArrayLiteral);
+    this.registerPrefix('{', this.parseHashLiteral);
 
     this.infixParseFns = {};
 
@@ -79,6 +86,7 @@ export class Parser {
     this.registerInfix('>', this.parseInfixExpression);
 
     this.registerInfix('(', this.parseCallExpression);
+    this.registerInfix('[', this.parseIndexExpression);
 
     this.getNextToken();
     this.getNextToken();
@@ -411,35 +419,84 @@ export class Parser {
 
   private parseCallExpression(fn: Expression): Expression {
     const exp = new CallExpression(this.currentToken, fn);
-    const args = this.parseCallArguments();
+    const args = this.parseExpressionList(')');
     if (args) exp.arguments = args;
     return exp;
   }
 
-  private parseCallArguments(): Expression[] | null {
-    const args: Expression[] = [];
+  private parseArrayLiteral(): Expression {
+    const array = new ArrayLiteral(this.currentToken);
+    array.elements = this.parseExpressionList(']') ?? [];
+    return array;
+  }
 
-    if (this.peekTokenIs(')')) {
-      this.getNextToken();
-      return args;
+  private parseIndexExpression(left: Expression): Expression {
+    const exp = new IndexExpression(this.currentToken, left);
+
+    this.getNextToken();
+
+    const lowestExp = this.parseExpression(Precedence.LOWEST);
+    if (lowestExp) exp.index = lowestExp;
+
+    if (!this.expectPeek(']')) {
+      throw new Error('Right bracket `]` not provided.');
     }
+
+    return exp;
+  }
+
+  private parseExpressionList(end: Token['type']): Expression[] | null {
+    const list: Expression[] = [];
+
+    if (this.peekTokenIs(end)) {
+      this.getNextToken();
+      return list;
+    }
+    8;
 
     this.getNextToken();
 
     const exp = this.parseExpression(Precedence.LOWEST);
-    if (exp) args.push(exp);
+    if (exp) list.push(exp);
 
     while (this.peekTokenIs(',')) {
       this.getNextToken();
       this.getNextToken();
 
       const exp = this.parseExpression(Precedence.LOWEST);
-      if (exp) args.push(exp);
+      if (exp) list.push(exp);
     }
 
-    if (!this.expectPeek(')')) return null;
+    if (!this.expectPeek(end)) return null;
 
-    return args;
+    return list;
+  }
+
+  private parseHashLiteral(): Expression | null {
+    const hash = new HashLiteral(this.currentToken);
+    hash.pairs = new Map();
+
+    while (!this.peekTokenIs('}')) {
+      this.getNextToken();
+      const key = this.parseExpression(Precedence.LOWEST);
+
+      if (!this.expectPeek(':')) {
+        return null;
+      }
+
+      this.getNextToken();
+      const value = this.parseExpression(Precedence.LOWEST);
+
+      if (key && value) {
+        hash.pairs.set(key, value);
+      }
+
+      if (!this.peekTokenIs('}') && !this.expectPeek(',')) return null;
+    }
+
+    if (!this.expectPeek('}')) return null;
+
+    return hash;
   }
 
   private registerPrefix(tokenType: Token['type'], fn: PrefixParseFn): void {

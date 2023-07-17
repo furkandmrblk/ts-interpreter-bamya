@@ -23,9 +23,12 @@ export const TokenType = {
   RParen: ')',
   LSquirly: '{',
   RSquirly: '}',
+  LBracket: '[',
+  RBracket: ']',
 
   Comma: ',',
   Semicolon: ';',
+  Colon: ':',
 
   Let: 'LET',
   Function: 'FUNCTION',

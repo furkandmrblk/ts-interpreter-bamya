@@ -1,11 +1,14 @@
 import {
+  ArrayLiteral,
   Boolean,
   CallExpression,
   Expression,
   ExpressionStatement,
   FunctionLiteral,
+  HashLiteral,
   Identifier,
   IfExpression,
+  IndexExpression,
   InfixExpression,
   IntegerLiteral,
   LetStatement,
@@ -160,7 +163,7 @@ test('Identifier-Expressions', () => {
   }
 });
 
-test('IntegerLiteral-Expressions', () => {
+test('Integer-Literal-Expressions', () => {
   const input = '5;';
 
   const lexer = new Lexer(input);
@@ -200,7 +203,7 @@ test('IntegerLiteral-Expressions', () => {
   }
 });
 
-test('ParsingPrefix-Expressions', () => {
+test('Parsing Prefix-Expressions', () => {
   const prefixTests: {
     input: string;
     operator: string;
@@ -279,7 +282,7 @@ test('ParsingPrefix-Expressions', () => {
   }
 });
 
-test('ParsingInfix-Expressions', () => {
+test('Parsing Infix-Expressions', () => {
   const infixTests: {
     input: string;
     leftValue: unknown;
@@ -436,7 +439,7 @@ test('ParsingInfix-Expressions', () => {
   }
 });
 
-test('OperatorPrecedence-Parsing', () => {
+test('Operator-Precedence-Parsing', () => {
   const tests: {
     input: string;
     expected: string;
@@ -545,6 +548,14 @@ test('OperatorPrecedence-Parsing', () => {
       input: 'add(a + b + c * d / f + g)',
       expected: 'add((((a + b) + ((c * d) / f)) + g))',
     },
+    {
+      input: 'a * [1, 2, 3, 4][b * c] * d',
+      expected: '((a * ([1, 2, 3, 4][(b * c)])) * d)',
+    },
+    {
+      input: 'add(a * b[2], b[1], 2 * [1, 2][1])',
+      expected: 'add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))',
+    },
   ];
 
   for (const test of tests) {
@@ -562,7 +573,7 @@ test('OperatorPrecedence-Parsing', () => {
   }
 });
 
-test('IfExpressions', () => {
+test('If-Expressions', () => {
   const input = `if (x < y) { x }`;
 
   const lexer = new Lexer(input);
@@ -618,7 +629,7 @@ test('IfExpressions', () => {
   }
 });
 
-test('IfElseExpressions', () => {
+test('If-Else-Expressions', () => {
   const input = 'if (x < y) { x } else { y }';
 
   const lexer = new Lexer(input);
@@ -684,7 +695,7 @@ test('IfElseExpressions', () => {
   if (!testIdentifier(alternative.expression, 'y')) return;
 });
 
-test('FunctionLiteral-Parsing', () => {
+test('Function-Literal-Parsing', () => {
   const input = 'fn(x, y) { x + y }';
 
   const lexer = new Lexer(input);
@@ -741,7 +752,7 @@ test('FunctionLiteral-Parsing', () => {
   testInfixExpression(bodyStatement.expression, 'x', '+', 'y');
 });
 
-test('FunctionParameter-Parsing', () => {
+test('Function-Parameter-Parsing', () => {
   const tests: {
     input: string;
     expectedParams: string[];
@@ -777,7 +788,7 @@ test('FunctionParameter-Parsing', () => {
   }
 });
 
-test('CallExpression-Parsing', () => {
+test('Call-Expression-Parsing', () => {
   const input = 'add(1, 2 * 3, 4 + 5);';
 
   const lexer = new Lexer(input);
@@ -819,7 +830,7 @@ test('CallExpression-Parsing', () => {
   testInfixExpression(exp.arguments[2], 4, '+', 5);
 });
 
-test('StringLiteral-Expression', () => {
+test('String-Literal-Expression', () => {
   const input = `"hello world";`;
 
   const lexer = new Lexer(input);
@@ -841,6 +852,185 @@ test('StringLiteral-Expression', () => {
 
   if (literal.value !== 'hello world')
     throw new Error(`literal.value not "hello world". got=${literal.value}.`);
+});
+
+test('Parsing Array-Literals', () => {
+  const input = '[1, 2 * 2, 3 + 3]';
+
+  const lexer = new Lexer(input);
+  const p = new Parser(lexer);
+  const program = p.ParseProgram();
+
+  checkParserErrors(p);
+
+  if (!(program.statements[0] instanceof ExpressionStatement))
+    throw new Error(`statement is not ExpressionStatement.`);
+
+  const expression = program.statements[0].expression;
+
+  if (!(expression instanceof ArrayLiteral)) {
+    throw new Error(`expression not ast.ArrayLiteral. got=${expression}.`);
+  }
+
+  const arr = expression;
+
+  if (arr.elements.length !== 3)
+    throw new Error(
+      `array.elements.length is not 3. got=${arr.elements.length}.`
+    );
+
+  const elements = arr.elements;
+
+  testIntegerLiteral(elements[0], 1);
+  testInfixExpression(elements[1], 2, '*', 2);
+  testInfixExpression(elements[2], 3, '+', 3);
+});
+
+test('Parsing Index-Expressions', () => {
+  const input = 'myArray[1 + 1]';
+
+  const lexer = new Lexer(input);
+  const p = new Parser(lexer);
+  const program = p.ParseProgram();
+
+  checkParserErrors(p);
+
+  const statement = program.statements[0];
+
+  if (!(statement instanceof ExpressionStatement))
+    throw new Error(`statement not ExpresionStatement. got=${statement}.`);
+
+  const expression = statement.expression;
+
+  if (!(expression instanceof IndexExpression))
+    throw new Error(`expression not *ast.IndexExpression. got=${expression}.`);
+
+  if (!testIdentifier(expression.left, 'myArray')) return;
+
+  if (!testInfixExpression(expression.index, 1, '+', 1)) return;
+});
+
+test('Parsing Hash-Literal-String-Keys', () => {
+  const input = `{"one": 1, "two": 2, "three": 3}`;
+
+  const lexer = new Lexer(input);
+  const p = new Parser(lexer);
+  const program = p.ParseProgram();
+
+  checkParserErrors(p);
+
+  const statement = program.statements[0];
+
+  if (!(statement instanceof ExpressionStatement))
+    throw new Error(`statement not ExpressionStatement.`);
+
+  const hash = statement.expression;
+
+  if (!(hash instanceof HashLiteral))
+    throw new Error(`exp is not ast.HashLiteral. got=${hash}.`);
+
+  const expected: Record<string, number> = {
+    one: 1,
+    two: 2,
+    three: 3,
+  };
+
+  if (hash.pairs.size !== Object.keys(expected).length)
+    throw new Error(
+      `hash.Pairs has wrong length. got=${hash.pairs.size}, wanted=${
+        Object.keys(expected).length
+      }.`
+    );
+
+  for (const [key, value] of hash.pairs) {
+    if (!(key instanceof StringLiteral))
+      throw new Error(`key is not ast.StringLiteral. got=${key}`);
+
+    const expectedValue = expected[key.String()];
+    testIntegerLiteral(value, expectedValue);
+  }
+});
+
+test('Parsing Empty-Hash-Literal', () => {
+  const input = '{}';
+
+  const lexer = new Lexer(input);
+  const p = new Parser(lexer);
+  const program = p.ParseProgram();
+
+  checkParserErrors(p);
+
+  const statement = program.statements[0];
+
+  if (!(statement instanceof ExpressionStatement))
+    throw new Error(`statement not ExpressionStatement.`);
+
+  const hash = statement.expression;
+
+  if (!(hash instanceof HashLiteral))
+    throw new Error(`exp is not ast.HashLiteral. got=${hash}.`);
+
+  if (hash.pairs.size !== 0)
+    throw new Error(`hash.pairs has wrong length. got=${hash.pairs.size}.`);
+});
+
+test('Parsing Hash-Literals-With-Expressions', () => {
+  const input = `{"one": 0 + 1, "two": 10 - 8, "three": 15 / 5}`;
+
+  const lexer = new Lexer(input);
+  const p = new Parser(lexer);
+  const program = p.ParseProgram();
+
+  checkParserErrors(p);
+
+  const statement = program.statements[0];
+
+  if (!(statement instanceof ExpressionStatement))
+    throw new Error(`statement not ExpressionStatement.`);
+
+  const hash = statement.expression;
+
+  if (!(hash instanceof HashLiteral))
+    throw new Error(`exp is not ast.HashLiteral. got=${hash}.`);
+
+  if (hash.pairs.size !== 3)
+    throw new Error(`hash.pairs has wrong length. got=${hash.pairs.size}.`);
+
+  const tests: Record<string, (e: Expression) => void>[] = [
+    {
+      one: function (e: Expression) {
+        testInfixExpression(e, 0, '+', 1);
+      },
+    },
+    {
+      two: function (e: Expression) {
+        testInfixExpression(e, 10, '-', 8);
+      },
+    },
+    {
+      three: function (e: Expression) {
+        testInfixExpression(e, 15, '/', 5);
+      },
+    },
+  ];
+
+  for (const [key, value] of hash.pairs) {
+    const literal = key;
+
+    if (!(literal instanceof StringLiteral))
+      throw new Error(`key is not ast.Stringliteral. got=${key}.`);
+
+    const testObject = tests.find(
+      (obj) => Object.keys(obj)[0] === literal.String()
+    );
+
+    if (!testObject)
+      throw new Error(`No test function for key ${literal.String()} found.`);
+
+    const testFunction = Object.values(testObject)[0];
+
+    testFunction(value);
+  }
 });
 
 const testLetStatement = (

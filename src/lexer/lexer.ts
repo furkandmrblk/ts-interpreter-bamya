@@ -88,6 +88,13 @@ export class Lexer {
       case '}':
         token = createToken('RSquirly', this.ch);
         break;
+
+      case '[':
+        token = createToken('LBracket', this.ch);
+        break;
+      case ']':
+        token = createToken('RBracket', this.ch);
+        break;
       case '"':
         token = createToken('String', this.readString());
         break;
@@ -96,6 +103,9 @@ export class Lexer {
         break;
       case ';':
         token = createToken('Semicolon', this.ch);
+        break;
+      case ':':
+        token = createToken('Colon', this.ch);
         break;
       case '\0':
         token = createToken('Eof', 'eof');

@@ -1,16 +1,19 @@
 import { Lexer } from '../../lexer/lexer';
 import { createNewEnvironment } from '../../object/environment/environment';
 import {
+  Array,
   Boolean,
   Error,
   Function,
+  Hash,
+  HashKey,
   Integer,
   Object,
   ObjectTypes,
   String,
 } from '../../object/object';
 import { Parser } from '../../parser/parser';
-import { Eval } from '../evaluator';
+import { Eval, references } from '../evaluator';
 
 test('Evaluate Integer-Expressions', () => {
   const tests: { input: string; expected: number }[] = [
@@ -335,6 +338,14 @@ test('Error Handling', () => {
       input: 'foobar',
       expectedMessage: 'identifier not found: foobar',
     },
+    {
+      input: `"Hello" - "World"`,
+      expectedMessage: 'unknown operator: STRING - STRING',
+    },
+    {
+      input: `{"name": "Monkey"}[fn(x) { x }];`,
+      expectedMessage: 'unusable as hash key: FUNCTION',
+    },
   ];
 
   for (const test of tests) {
@@ -468,6 +479,238 @@ test('Evaluate String-Literals', () => {
     );
 });
 
+test('Evaluate String-Concatenation', () => {
+  const input = `"Hello" + " " + "World!"`;
+
+  const evaluated = testEval(input);
+
+  if (!(evaluated instanceof String))
+    throw new Error(`object is not String. got=${evaluated}.`);
+
+  if (evaluated.value !== 'Hello World!')
+    throw new Error(`String has wrong value. got=${evaluated.value}.`);
+});
+
+test('Evaluate Builtin-Functions', () => {
+  const tests: {
+    input: string;
+    expected: unknown;
+  }[] = [
+    {
+      input: `len("")`,
+      expected: 0,
+    },
+    {
+      input: `len("four")`,
+      expected: 4,
+    },
+    {
+      input: `len("hello world")`,
+      expected: 11,
+    },
+    {
+      input: `len(1)`,
+      expected: 'argument to `len` not supported, got INTEGER',
+    },
+    {
+      input: `len("one", "two")`,
+      expected: 'wrong number of arguments. got=2, wanted=1',
+    },
+    {
+      input: `log("hello")`,
+      expected: null,
+    },
+  ];
+
+  for (const test of tests) {
+    const evaluated = testEval(test.input);
+    const expected = test.expected;
+
+    switch (typeof expected) {
+      case 'number':
+        testIntegerObject(evaluated, Number(expected));
+        break;
+      case 'string':
+        if (!(evaluated instanceof Error))
+          throw new Error(`object is not Error. got=${evaluated}`);
+
+        if (evaluated.message !== expected)
+          throw new Error(
+            `wrong error message. expected=${expected}, got=${evaluated.message}`
+          );
+        break;
+    }
+  }
+});
+
+test('Evaluate Array-Literals', () => {
+  const input = '[1, 2 * 2, 3  + 3]';
+
+  const evaluated = testEval(input);
+
+  if (!(evaluated instanceof Array))
+    throw new Error(`object is not Array. got=${evaluated}.`);
+
+  if (evaluated.elements.length !== 3)
+    throw new Error(
+      `array has wrong number of elements. got=${evaluated.elements.length}.`
+    );
+
+  testIntegerObject(evaluated.elements[0], 1);
+  testIntegerObject(evaluated.elements[1], 4);
+  testIntegerObject(evaluated.elements[2], 6);
+});
+
+test('Evaluate Array-Index-Expressions', () => {
+  const tests: {
+    input: string;
+    expected: unknown;
+  }[] = [
+    {
+      input: '[1, 2, 3][0]',
+      expected: 1,
+    },
+    {
+      input: '[1, 2, 3][1]',
+      expected: 2,
+    },
+    {
+      input: '[1, 2, 3][2]',
+      expected: 3,
+    },
+    {
+      input: 'let i = 0; [1][i];',
+      expected: 1,
+    },
+    {
+      input: '[1, 2, 3][1 + 1];',
+      expected: 3,
+    },
+    {
+      input: 'let myArray = [1, 2, 3]; myArray[2];',
+      expected: 3,
+    },
+    {
+      input: 'let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];',
+      expected: 6,
+    },
+    {
+      input: 'let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]',
+      expected: 2,
+    },
+    {
+      input: '[1, 2, 3][3]',
+      expected: null,
+    },
+    {
+      input: '[1, 2, 3][-1]',
+      expected: null,
+    },
+  ];
+
+  for (const test of tests) {
+    const evaluated = testEval(test.input);
+    const int = test.expected;
+    if (typeof int === 'number') {
+      testIntegerObject(evaluated, int);
+    } else {
+      testNullObject(evaluated);
+    }
+  }
+});
+
+test('Evaluate Hash-Literals', () => {
+  const input = `let two = "two";
+  {
+    "one": 10 - 9,
+    two: 1 + 1,
+    "thr" + "ee": 6 / 2,
+    4: 4,
+    true: 5,
+    false: 6
+  }`;
+
+  const evaluated = testEval(input);
+  const result = evaluated;
+
+  if (!(result instanceof Hash))
+    throw new Error(`Eval didn't return Hash. got=${result}.`);
+
+  const expected: Map<HashKey, number> = new Map([
+    [new String('one').hashKey(), 1],
+    [new String('two').hashKey(), 2],
+    [new String('three').hashKey(), 3],
+    [new Integer(4).hashKey(), 4],
+    [references.TRUE.hashKey(), 5],
+    [references.FALSE.hashKey(), 6],
+  ]);
+
+  if (result.pairs.size !== expected.size)
+    throw new Error(
+      `Hash has wrong number of pairs. got=${result.pairs.size}, wanted=${expected.size}.`
+    );
+
+  for (const key of Object.keys(expected)) {
+    const expectedKey = key as unknown as HashKey;
+    const expectedValue = expected.get(expectedKey);
+
+    if (!expectedValue)
+      throw new Error(`expectedValue is undefined. got=${expectedValue}.`);
+
+    const pair = result.pairs.get(`${expectedKey.type}:${expectedKey.value}`);
+    if (!pair) throw new Error(`no pair for given key in pairs.`);
+
+    testIntegerObject(pair.value, expectedValue);
+  }
+});
+
+test('Evaluate Index-Expressions', () => {
+  const tests: {
+    input: string;
+    expected: unknown;
+  }[] = [
+    {
+      input: `{"foo": 5}["foo"]`,
+      expected: 5,
+    },
+    {
+      input: `{"foo":5}["bar"]`,
+      expected: null,
+    },
+    {
+      input: `{}["foo"]`,
+      expected: null,
+    },
+    {
+      input: `let key = "foo"; {"foo": 5}[key]`,
+      expected: 5,
+    },
+    {
+      input: `{5: 5}[5]`,
+      expected: 5,
+    },
+    {
+      input: `{true: 5}[true]`,
+      expected: 5,
+    },
+    {
+      input: `{false: 5}[false]`,
+      expected: 5,
+    },
+  ];
+
+  for (const test of tests) {
+    const evaluated = testEval(test.input);
+    const int = test.expected;
+
+    if (typeof int === 'number') {
+      testIntegerObject(evaluated, int);
+    } else {
+      testNullObject(evaluated);
+    }
+  }
+});
+
 const testEval = (input: string) => {
   const lexer = new Lexer(input);
   const p = new Parser(lexer);
@@ -504,7 +747,8 @@ const testBooleanObject = (obj: unknown, expected: boolean): boolean => {
 };
 
 const testNullObject = (obj: Object | null): boolean => {
-  if (obj !== null) throw new Error(`object is not NULL. got=${obj}.`);
+  if (obj !== null && obj !== references.NULL)
+    throw new Error(`object is not NULL. got=${obj}.`);
 
   return true;
 };

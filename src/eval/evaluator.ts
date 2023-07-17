@@ -15,6 +15,9 @@ import {
   CallExpression,
   Expression,
   StringLiteral,
+  ArrayLiteral,
+  IndexExpression,
+  HashLiteral,
 } from '../ast/ast';
 import {
   Environment,
@@ -30,7 +33,12 @@ import {
   Error,
   Function,
   String,
+  BuiltIn,
+  Array,
+  HashPair,
+  Hash,
 } from '../object/object';
+import { builtins } from './builtins/builtins';
 
 type EvalTypes = Integer | Boolean | Object | Error;
 
@@ -61,6 +69,15 @@ export const Eval = (node: AstNode, env: Environment): EvalTypes | null => {
     if (val) return new ReturnValue(val);
   }
 
+  if (node instanceof ArrayLiteral) {
+    const elements = evaluateExpressions(node.elements, env);
+    if (elements.length === 1 && isError(elements[0])) {
+      return elements[0];
+    }
+
+    return new Array(elements);
+  }
+
   if (node instanceof LetStatement) {
     const val = Eval(node.value, env);
 
@@ -79,6 +96,20 @@ export const Eval = (node: AstNode, env: Environment): EvalTypes | null => {
 
   if (node instanceof AstBoolean) {
     return nativeBoolToBooleanObject(node.value);
+  }
+
+  if (node instanceof IndexExpression) {
+    const left = Eval(node.left, env);
+
+    if (isError(left)) return left;
+
+    const index = Eval(node.index, env);
+
+    if (isError(index)) return index;
+
+    if (left && index) {
+      return evaluateIndexExpression(left, index);
+    } else return newError(`operator left or index is null. wanted=Object`);
   }
 
   if (node instanceof PrefixExpression) {
@@ -123,6 +154,10 @@ export const Eval = (node: AstNode, env: Environment): EvalTypes | null => {
     if (args.length === 1 && isError(args[0])) return args[0];
 
     if (fn) return applyFunction(fn, args);
+  }
+
+  if (node instanceof HashLiteral) {
+    return evaluateHashLiteral(node, env);
   }
 
   return null;
@@ -176,9 +211,15 @@ const evaluateBlockStatement = (
 const evaluateIdentifier = (node: Identifier, env: Environment): Object => {
   const val = env.get(node.value);
 
-  if (!val) return newError(`identifier not found: ${node.value}`);
+  if (val) {
+    return val;
+  }
 
-  return val;
+  const builtin = builtins[node.value];
+
+  if (builtin) return builtin;
+
+  return newError(`identifier not found: ${node.value}`);
 };
 
 const nativeBoolToBooleanObject = (input: boolean): Boolean => {
@@ -263,8 +304,15 @@ const evaluateInfixExpression = (
     );
 
   if (
-    left.type() == ObjectTypes.INTEGER_OBJ &&
-    right.type() == ObjectTypes.INTEGER_OBJ
+    left.type() === ObjectTypes.STRING_OBJ &&
+    right.type() === ObjectTypes.STRING_OBJ
+  ) {
+    return evaluateStringInfixExpression(operator, left, right);
+  }
+
+  if (
+    left.type() === ObjectTypes.INTEGER_OBJ &&
+    right.type() === ObjectTypes.INTEGER_OBJ
   ) {
     return evaluateIntegerInfixExpression(operator, left, right);
   }
@@ -273,7 +321,7 @@ const evaluateInfixExpression = (
     return nativeBoolToBooleanObject(left == right);
   }
 
-  if (operator == '!=') {
+  if (operator === '!=') {
     return nativeBoolToBooleanObject(left != right);
   }
 
@@ -333,14 +381,124 @@ const evaluateExpressions = (
   return result;
 };
 
+const evaluateHashLiteral = (node: HashLiteral, env: Environment): Object => {
+  const pairs: Map<string, HashPair> = new Map();
+
+  for (const [keyNode, valueNode] of node.pairs) {
+    const key = Eval(keyNode, env);
+    if (isError(key) && key) {
+      return key;
+    }
+
+    const hashKey = key;
+
+    if (
+      !(
+        hashKey instanceof Integer ||
+        hashKey instanceof Boolean ||
+        hashKey instanceof String
+      )
+    ) {
+      return newError(`unusuable as hash key: ${key?.type()}.`);
+    }
+
+    const value = Eval(valueNode, env);
+
+    if (isError(value) && value) return value;
+
+    const hashed = hashKey.hashKey();
+
+    if (key && value) {
+      pairs.set(`${hashed.type}:${hashed.value}`, new HashPair(key, value));
+    }
+  }
+
+  const result = new Hash(pairs);
+
+  return result;
+};
+
+const evaluateHashIndexExpression = (hash: Object, index: Object): Object => {
+  const hashObject = hash;
+  if (!(hashObject instanceof Hash))
+    return newError(`hash is not of instance Hash.`);
+
+  const key = index;
+  if (
+    !(key instanceof Integer || key instanceof Boolean || key instanceof String)
+  )
+    return newError(`unusable as hash key: ${index.type()}`);
+
+  const lookupKey = key.hashKey();
+
+  const pair = hashObject.pairs.get(`${lookupKey.type}:${lookupKey.value}`);
+
+  if (!pair) return references.NULL;
+
+  return pair.value;
+};
+
+const evaluateStringInfixExpression = (
+  operator: string,
+  left: Object,
+  right: Object
+): Object => {
+  if (operator !== '+')
+    return newError(
+      `unknown operator: ${left.type()} ${operator} ${right.type()}`
+    );
+
+  const leftVal = (left as String).value;
+  const rightVal = (right as String).value;
+
+  return new String(leftVal + rightVal);
+};
+
+const evaluateIndexExpression = (left: Object, index: Object): Object => {
+  if (
+    left.type() === ObjectTypes.ARRAY_OBJ &&
+    index.type() === ObjectTypes.INTEGER_OBJ
+  ) {
+    if (left instanceof Array) {
+      return evaluateArrayIndexExpression(left, index);
+    }
+    return newError(`left operator is not Array.`);
+  }
+
+  if (left.type() === ObjectTypes.HASH_OBJ) {
+    return evaluateHashIndexExpression(left, index);
+  }
+
+  return newError(`index operator not supported: ${left.type()}.`);
+};
+
+const evaluateArrayIndexExpression = (array: Array, index: Object): Object => {
+  const idx = (index as Integer).value;
+  const max = array.elements.length - 1;
+
+  if (idx < 0 || idx > max) {
+    return references.NULL;
+  }
+
+  return array.elements[idx];
+};
+
 const applyFunction = (fn: Object, args: Object[]): Object | null => {
-  if (!(fn instanceof Function))
-    throw new Error(`not a function: ${fn.type()}.`);
+  if (fn instanceof Function) {
+    const extendedEnv = extendFunctionEnvironment(fn, args);
+    const evaluated = Eval(fn.body, extendedEnv);
+    return unwrapReturnValue(evaluated);
+  }
 
-  const extendedEnv = extendFunctionEnvironment(fn, args);
-  const evaluated = Eval(fn.body, extendedEnv);
+  if (fn instanceof BuiltIn) {
+    const func = fn.fn(...args);
 
-  return unwrapReturnValue(evaluated);
+    if (typeof func !== 'undefined') {
+      return func;
+    } else return null;
+  }
+
+  return newError(`not a function: ${fn.type()}.`);
 };
 
 const extendFunctionEnvironment = (
@@ -366,7 +524,7 @@ const unwrapReturnValue = (obj: Object | null): Object | null => {
   return null;
 };
 
-const newError = (message: string): Error => {
+export const newError = (message: string): Error => {
   return new Error(message);
 };
 

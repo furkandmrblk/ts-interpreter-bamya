@@ -4,7 +4,7 @@ import { Parser } from '../parser/parser';
 import { Eval } from '../eval/evaluator';
 import { createNewEnvironment } from '../object/environment/environment';
 
-const PROMPT = '>> ';
+const PROMPT = '> ';
 
 export const startRepl = (): void => {
   const rl = readline.createInterface({

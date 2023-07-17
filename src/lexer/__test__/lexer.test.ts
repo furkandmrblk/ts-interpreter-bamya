@@ -74,6 +74,9 @@ test('test getNextToken() 2.0', function () {
   
   "foobar"
   "foo bar"
+
+  [1, 2];
+  {"foo": "bar"}
   `;
 
   const tokens: Token[] = [
@@ -163,6 +166,19 @@ test('test getNextToken() 2.0', function () {
       type: TokenType.String,
       literal: 'foo bar',
     },
+
+    { type: TokenType.LBracket, literal: '[' },
+    { type: TokenType.Int, literal: '1' },
+    { type: TokenType.Comma, literal: ',' },
+    { type: TokenType.Int, literal: '2' },
+    { type: TokenType.RBracket, literal: ']' },
+    { type: TokenType.Semicolon, literal: ';' },
+
+    { type: TokenType.LSquirly, literal: '{' },
+    { type: TokenType.String, literal: 'foo' },
+    { type: TokenType.Colon, literal: ':' },
+    { type: TokenType.String, literal: 'bar' },
+    { type: TokenType.RSquirly, literal: '}' },
   ];
 
   const lexer = new Lexer(input);
