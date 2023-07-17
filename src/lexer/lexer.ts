@@ -146,7 +146,7 @@ export class Lexer {
   private readIdentity(): string {
     const position = this.position;
 
-    while (isLetter(this.ch)) {
+    while (isLetter(this.ch) || isDigit(this.ch)) {
       this.readCharacter();
     }
 

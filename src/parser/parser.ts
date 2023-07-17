@@ -134,9 +134,14 @@ export class Parser {
   public ParseProgram() {
     const program = new Program([]);
 
-    while (!this.currentTokenIs('EOF')) {
-      const stmt = this.parseStatement();
+    if (this.currentTokenIs('ILLEGAL')) {
+      this.errors.push(
+        `Provided token is not supported. got=${this.currentToken.literal}`
+      );
+    }
 
+    while (!this.currentTokenIs('EOF') && !this.currentTokenIs('ILLEGAL')) {
+      const stmt = this.parseStatement();
       if (stmt !== null) {
         program.statements.push(stmt);
       }

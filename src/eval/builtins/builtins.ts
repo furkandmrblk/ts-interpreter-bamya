@@ -112,9 +112,11 @@ export const builtins: BuiltinMap = {
 
     return new Array(newElements);
   }),
-  log: new BuiltIn((...args: Object[]): void => {
+  log: new BuiltIn((...args: Object[]): Object => {
     for (const arg of args) {
       console.log(arg.inspect());
     }
+
+    return references.NULL;
   }),
 };

@@ -241,7 +241,7 @@ export class Function implements Object, FunctionType {
 }
 
 export type BuiltinFunctionType = {
-  fn: (...args: Object[]) => Object | void;
+  fn: (...args: Object[]) => Object;
 } & Object;
 
 export class BuiltIn implements BuiltinFunctionType {

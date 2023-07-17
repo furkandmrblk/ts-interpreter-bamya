@@ -491,11 +491,7 @@ const applyFunction = (fn: Object, args: Object[]): Object | null => {
   }
 
   if (fn instanceof BuiltIn) {
-    const func = fn.fn(...args);
-
-    if (typeof func !== 'undefined') {
-      return func;
-    } else return null;
+    return fn.fn(...args);
   }
 
   return newError(`not a function: ${fn.type()}.`);
